@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create beautiful digital photo books from your Google Drive folders. Sign in, pick a folder, and share your gallery with anyone.">
+  <title>Folio — Digital Photo Books from Google Drive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/index.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+</head>
+<body>
+  <!-- ─── Top Bar ─── -->
+  <header id="top-bar">
+    <a href="/" id="logo-link" aria-label="Folio home">
+      <span id="logo-mark">◈</span>
+      <span id="logo-text">Folio</span>
+    </a>
+    <nav id="top-nav">
+      <button id="btn-share" class="nav-btn" hidden aria-label="Share this gallery">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        <span class="nav-label">Share</span>
+      </button>
+      <button id="btn-folder-picker" class="nav-btn" hidden aria-label="Choose folder">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        <span class="nav-label">Folders</span>
+      </button>
+      <button id="btn-sign-in" class="nav-btn nav-btn--accent" aria-label="Sign in with Google">Sign in</button>
+      <button id="btn-user-menu" class="nav-btn" hidden aria-label="Account menu">
+        <img id="user-avatar" alt="" width="28" height="28">
+        <span id="user-name" class="nav-label"></span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- ─── Landing / Auth Gate ─── -->
+  <section id="landing" aria-labelledby="landing-heading">
+    <div id="landing-content">
+      <h1 id="landing-heading">Your photos,<br>beautifully displayed.</h1>
+      <p id="landing-sub">Connect a Google Drive folder and instantly create a shareable digital photo book — no uploads, no waiting.</p>
+      <button id="btn-landing-sign-in" class="btn-primary" aria-label="Get started by signing in">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09z" fill="var(--clr-accent)"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="var(--clr-success)"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="var(--clr-warning)"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="var(--clr-error)"/></svg>
+        Sign in with Google
+      </button>
+      <p id="landing-note">Your photos stay in Drive. Folio only reads — never modifies — your files.</p>
+    </div>
+  </section>
+
+  <!-- ─── Folder Input ─── -->
+  <section id="folder-input" hidden aria-labelledby="folder-heading">
+    <h2 id="folder-heading">Open a Google Drive folder</h2>
+    <form id="folder-form" autocomplete="off">
+      <label for="folder-url" class="sr-only">Google Drive folder URL or ID</label>
+      <input id="folder-url" type="text" placeholder="Paste a Drive folder link or folder ID…" spellcheck="false" required>
+      <button type="submit" id="btn-load-folder" class="btn-primary">Load Photos</button>
+    </form>
+    <p id="folder-hint">Paste a link like <code>https://drive.google.com/drive/folders/abc123</code></p>
+  </section>
+
+  <!-- ─── Loading State ─── -->
+  <section id="loading-state" hidden aria-live="polite">
+    <div id="loader-ring"></div>
+    <p id="loading-text">Scanning your folder…</p>
+  </section>
+
+  <!-- ─── Gallery ─── -->
+  <section id="gallery-section" hidden aria-labelledby="gallery-heading">
+    <header id="gallery-header">
+      <div>
+        <h2 id="gallery-heading"></h2>
+        <p id="gallery-count"></p>
+      </div>
+      <div id="gallery-controls">
+        <label for="col-slider" id="col-label">Columns</label>
+        <input id="col-slider" type="range" min="2" max="6" value="4" aria-label="Number of columns">
+        <button id="btn-sort" class="icon-btn" aria-label="Toggle sort order" title="Toggle sort order">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 5 6 1 1 5"/><line x1="6" y1="1" x2="6" y2="17"/><polyline points="13 19 18 23 23 19"/><line x1="18" y1="23" x2="18" y2="7"/></svg>
+        </button>
+      </div>
+    </header>
+    <div id="masonry-grid" role="list" aria-label="Photo gallery"></div>
+  </section>
+
+  <!-- ─── Lightbox ─── -->
+  <dialog id="lightbox" aria-label="Photo viewer">
+    <button id="lb-close" class="lb-btn" aria-label="Close viewer">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <button id="lb-prev" class="lb-btn lb-nav" aria-label="Previous photo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <figure id="lb-figure">
+      <img id="lb-img" alt="">
+      <figcaption id="lb-caption"></figcaption>
+    </figure>
+    <button id="lb-next" class="lb-btn lb-nav" aria-label="Next photo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <p id="lb-counter"></p>
+  </dialog>
+
+  <!-- ─── Share Modal ─── -->
+  <dialog id="share-modal" aria-labelledby="share-title">
+    <header id="share-header">
+      <h3 id="share-title">Share this gallery</h3>
+      <button id="share-close" class="lb-btn" aria-label="Close share dialog">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </header>
+    <p id="share-desc">Anyone with this link can view photos from this folder — as long as the folder is shared with them in Google Drive.</p>
+    <div id="share-url-row">
+      <input id="share-url" type="text" readonly aria-label="Shareable link">
+      <button id="btn-copy-link" class="btn-primary btn-sm">Copy</button>
+    </div>
+    <p id="share-copied" hidden>Link copied to clipboard</p>
+    <details id="share-tip">
+      <summary>How sharing works</summary>
+      <p>This link encodes your Drive folder ID. Recipients must have view access to the folder in Google Drive. You can share access via Drive's built-in sharing settings.</p>
+    </details>
+  </dialog>
+
+  <!-- ─── User Menu Popover ─── -->
+  <div id="user-popover" popover aria-label="Account actions">
+    <p id="popover-email"></p>
+    <button id="btn-sign-out" class="nav-btn">Sign out</button>
+  </div>
+
+  <!-- ─── Toast ─── -->
+  <output id="toast" role="status" aria-live="polite"></output>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/gallery.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

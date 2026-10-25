@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Local credentials
+js/config.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

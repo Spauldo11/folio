@@ -1,0 +1,9 @@
+{
+  "name": "folio-photo-display",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digital photo books from Google Drive folders",
+  "scripts": {
+    "dev": "npx -y serve@latest . -l 3000 --cors"
+  }
+}
