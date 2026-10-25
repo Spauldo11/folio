@@ -48,15 +48,43 @@
     </div>
   </section>
 
-  <!-- ─── Folder Input ─── -->
-  <section id="folder-input" hidden aria-labelledby="folder-heading">
-    <h2 id="folder-heading">Open a Google Drive folder</h2>
-    <form id="folder-form" autocomplete="off">
-      <label for="folder-url" class="sr-only">Google Drive folder URL or ID</label>
-      <input id="folder-url" type="text" placeholder="Paste a Drive folder link or folder ID…" spellcheck="false" required>
-      <button type="submit" id="btn-load-folder" class="btn-primary">Load Photos</button>
-    </form>
-    <p id="folder-hint">Paste a link like <code>https://drive.google.com/drive/folders/abc123</code></p>
+  <!-- ─── Signed-In Workspace ─── -->
+  <section id="workspace" hidden aria-labelledby="workspace-heading">
+    <div class="workspace-banner">
+      <div class="user-chip">
+        <img id="workspace-avatar" class="user-chip__avatar" alt="" width="36" height="36">
+        <div class="user-chip__info">
+          <span class="user-chip__badge">● Signed in</span>
+          <span id="workspace-username" class="user-chip__name">User</span>
+          <span id="workspace-email" class="user-chip__email"></span>
+        </div>
+      </div>
+      <button id="btn-workspace-signout" class="nav-btn btn-sm" aria-label="Sign out">Sign out</button>
+    </div>
+
+    <div class="workspace-card">
+      <h2 id="workspace-heading">Open a Google Drive folder</h2>
+      <p class="workspace-sub">Paste any folder link to view its photos in a digital gallery.</p>
+      <form id="folder-form" autocomplete="off">
+        <label for="folder-url" class="sr-only">Google Drive folder URL or ID</label>
+        <div class="folder-input-row">
+          <input id="folder-url" type="text" placeholder="Paste a Drive folder link or folder ID…" spellcheck="false" required>
+          <button type="submit" id="btn-load-folder" class="btn-primary">Load Photos</button>
+        </div>
+      </form>
+      <p id="folder-hint">Paste a link like <code>https://drive.google.com/drive/folders/abc123</code></p>
+    </div>
+
+    <!-- ─── Saved Photo Books ─── -->
+    <div class="saved-folders-section">
+      <div class="saved-folders-header">
+        <h3 class="saved-folders-title">My Photo Books</h3>
+        <span id="saved-folders-count" class="badge">0 books</span>
+      </div>
+      <div id="saved-folders-list" class="saved-folders-grid" role="list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
   </section>
 
   <!-- ─── Loading State ─── -->
