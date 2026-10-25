@@ -84,12 +84,16 @@
     }
   });
 
+  Auth.onAuthError((errMsg) => {
+    showToast(errMsg, true);
+  });
+
   /* ─── Initialise auth ─── */
   try {
     await Auth.init();
   } catch (e) {
     console.error('Failed to initialise auth:', e);
-    showToast('Failed to load Google auth. Check your network.', true);
+    showToast(e.message || 'Failed to load Google auth.', true);
   }
 
   // Check if there's a folder ID in the URL on load (user may need to sign in first)

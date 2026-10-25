@@ -74,17 +74,21 @@ const Gallery = (() => {
    */
   async function _loadWithAuth(file, imgEl) {
     try {
-      const token = Auth.getToken();
-      if (!token) return;
-      const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) return;
-      const blob = await resp.blob();
-      imgEl.src = URL.createObjectURL(blob);
-    } catch {
-      // silently fail — image just won't display
+      const blobUrl = await Drive.fetchImageBlob(file.id);
+      imgEl.src = blobUrl;
+      imgEl.classList.remove('loading');
+      imgEl.classList.add('loaded');
+    } catch (e) {
+      console.warn(`[Gallery] Could not load image "${file.name}":`, e);
+      imgEl.classList.remove('loading');
+      imgEl.classList.add('load-failed');
+      const parent = imgEl.closest('.grid-item');
+      if (parent && !parent.querySelector('.grid-item__fallback')) {
+        const fallback = document.createElement('div');
+        fallback.className = 'grid-item__fallback';
+        fallback.innerHTML = `<span class="fallback-icon">🖼</span><span class="fallback-text">${_cleanFilename(file.name)}</span>`;
+        parent.appendChild(fallback);
+      }
     }
   }
 

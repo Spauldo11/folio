@@ -3,16 +3,22 @@
    ═══════════════════════════════════════════ */
 
 const Auth = (() => {
+  const STORAGE_KEY = 'folio_auth_session';
+
   let tokenClient = null;
   let accessToken = null;
   let userProfile = null;
-  let gapiReady = false;
 
   /** Listeners for auth state changes */
   const listeners = new Set();
+  const errorListeners = new Set();
 
   function onAuthChange(fn) {
     listeners.add(fn);
+  }
+
+  function onAuthError(fn) {
+    errorListeners.add(fn);
   }
 
   function _notify() {
@@ -20,6 +26,13 @@ const Auth = (() => {
     for (const fn of listeners) {
       try { fn({ signedIn: !!accessToken, userProfile, accessToken }); }
       catch (e) { console.error('[Auth] listener error:', e); }
+    }
+  }
+
+  function _notifyError(msg) {
+    console.error('[Auth] error:', msg);
+    for (const fn of errorListeners) {
+      try { fn(msg); } catch (e) { console.error('[Auth] error listener threw:', e); }
     }
   }
 
@@ -33,83 +46,81 @@ const Auth = (() => {
       const iv = setInterval(() => {
         if (window.google?.accounts?.oauth2) { clearInterval(iv); resolve(); return; }
         waited += 100;
-        if (waited > 15000) { clearInterval(iv); reject(new Error('Google Identity Services failed to load. Check your network connection.')); }
-      }, 100);
-    });
-  }
-
-  /**
-   * Wait for the gapi client to load and initialise with the Drive discovery doc.
-   */
-  function _waitForGapi() {
-    return new Promise((resolve, reject) => {
-      if (window.gapi?.client?.drive) { gapiReady = true; resolve(); return; }
-
-      let waited = 0;
-      const iv = setInterval(() => {
-        if (window.gapi) {
+        if (waited > 10000) {
           clearInterval(iv);
-          gapi.load('client', {
-            callback: async () => {
-              try {
-                await gapi.client.init({ discoveryDocs: [FOLIO_CONFIG.DISCOVERY_DOC] });
-                gapiReady = true;
-                console.log('[Auth] gapi client ready, drive API loaded');
-                resolve();
-              } catch (e) {
-                console.error('[Auth] gapi.client.init failed:', e);
-                reject(new Error('Failed to load Google Drive API: ' + (e.message || e)));
-              }
-            },
-            onerror: () => {
-              reject(new Error('Failed to load gapi client module'));
-            },
-          });
-          return;
+          reject(new Error('Google Identity Services script failed to load. Check your internet connection or ad-blocker.'));
         }
-        waited += 100;
-        if (waited > 15000) { clearInterval(iv); reject(new Error('Google API client script failed to load. Check your network connection.')); }
       }, 100);
     });
   }
 
   /**
-   * Initialise the token client (does NOT prompt the user yet).
+   * Save session to sessionStorage.
+   */
+  function _saveSession(token, expiresInSecs, profile) {
+    try {
+      const expiresAt = Date.now() + ((expiresInSecs || 3600) * 1000);
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ token, expiresAt, profile }));
+    } catch {
+      // Ignore sessionStorage errors
+    }
+  }
+
+  /**
+   * Restore existing session from sessionStorage if valid.
+   */
+  function _restoreSession() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      // Ensure token is valid for at least 60 seconds
+      if (data.token && data.expiresAt && data.expiresAt > Date.now() + 60000) {
+        accessToken = data.token;
+        userProfile = data.profile || { name: 'User', email: '' };
+        console.log('[Auth] session restored from sessionStorage:', userProfile.name);
+        return true;
+      }
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
+    return false;
+  }
+
+  /**
+   * Initialise the token client.
    */
   async function init() {
-    console.log('[Auth] init — waiting for GIS + gapi…');
-    await Promise.all([_waitForGIS(), _waitForGapi()]);
-    console.log('[Auth] GIS + gapi ready, creating token client');
+    console.log('[Auth] init — waiting for GIS…');
+    await _waitForGIS();
+    console.log('[Auth] GIS ready, initializing token client');
 
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: FOLIO_CONFIG.CLIENT_ID,
       scope: FOLIO_CONFIG.SCOPES,
       callback: _handleTokenResponse,
       error_callback: (err) => {
-        // Fires when the popup is blocked, closed, or consent fails
         console.error('[Auth] token client error:', err);
-        _notifyError('Sign-in failed: ' + (err.message || err.type || 'popup was closed or blocked'));
+        const detail = err.message || err.type || 'popup was closed or blocked';
+        _notifyError(`Sign-in error: ${detail}. If using an unverified Google Cloud project, make sure your email is added to "Test users" in Google Cloud Console.`);
       },
     });
 
     console.log('[Auth] init complete');
-  }
 
-  /** Error listeners */
-  const errorListeners = new Set();
-  function onAuthError(fn) { errorListeners.add(fn); }
-  function _notifyError(msg) {
-    for (const fn of errorListeners) {
-      try { fn(msg); } catch (e) { console.error('[Auth] error listener threw:', e); }
+    // Check if session was already active before page reload
+    if (_restoreSession()) {
+      _notify();
     }
   }
 
   /**
-   * Prompt the user to sign in and consent.
+   * Prompt the user to sign in.
    */
   function signIn() {
     if (!tokenClient) {
-      _notifyError('Google auth is still loading. Please wait a moment and try again.');
+      _notifyError('Google sign-in is still initializing. Please wait a moment and try again.');
       return;
     }
     console.log('[Auth] requesting access token…');
@@ -117,47 +128,39 @@ const Auth = (() => {
   }
 
   /**
-   * Sign the user out and revoke the token.
+   * Sign the user out and clear tokens.
    */
   function signOut() {
     if (accessToken) {
-      google.accounts.oauth2.revoke(accessToken, () => {});
+      try {
+        google.accounts.oauth2.revoke(accessToken, () => {});
+      } catch { /* ignore */ }
     }
     accessToken = null;
     userProfile = null;
-    try { gapi.client.setToken(null); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     _notify();
   }
 
   /**
    * Handle the token response from GIS.
-   * Wrapped in try/catch so the UI always updates or shows an error.
    */
   async function _handleTokenResponse(response) {
     try {
-      console.log('[Auth] token response received');
+      console.log('[Auth] token response received', response);
 
       if (response.error) {
-        console.error('[Auth] token response error:', response.error, response.error_description);
-        _notifyError('Sign-in error: ' + (response.error_description || response.error));
+        const desc = response.error_description || response.error;
+        _notifyError(`Sign-in error: ${desc}. Please verify that Authorized JavaScript Origins in Google Cloud Console includes ${window.location.origin}`);
         return;
       }
 
       accessToken = response.access_token;
-      console.log('[Auth] access token acquired');
+      const expiresIn = Number(response.expires_in) || 3600;
+      console.log('[Auth] access token acquired successfully');
 
-      // Set the token on gapi client so Drive API calls are authenticated
-      if (gapiReady && gapi.client) {
-        gapi.client.setToken({ access_token: accessToken });
-        console.log('[Auth] gapi token set');
-      } else {
-        console.warn('[Auth] gapi client not ready — waiting…');
-        await _waitForGapi();
-        gapi.client.setToken({ access_token: accessToken });
-        console.log('[Auth] gapi token set (after wait)');
-      }
-
-      // Fetch minimal profile info
+      // Fetch user profile info
+      userProfile = { name: 'User', email: '' };
       try {
         const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -165,27 +168,25 @@ const Auth = (() => {
         if (res.ok) {
           userProfile = await res.json();
           console.log('[Auth] profile fetched:', userProfile.name, userProfile.email);
-        } else {
-          console.warn('[Auth] userinfo request failed:', res.status);
-          userProfile = { name: 'User', email: '' };
         }
       } catch (e) {
-        console.warn('[Auth] userinfo fetch error:', e);
-        userProfile = { name: 'User', email: '' };
+        console.warn('[Auth] userinfo fetch non-critical error:', e);
       }
+
+      // Persist to session storage so refresh doesn't wipe auth
+      _saveSession(accessToken, expiresIn, userProfile);
 
       _notify();
 
     } catch (e) {
       console.error('[Auth] _handleTokenResponse crashed:', e);
-      _notifyError('Sign-in succeeded but setup failed: ' + e.message);
+      _notifyError('Sign-in setup failed: ' + e.message);
     }
   }
 
   function getToken() { return accessToken; }
   function getProfile() { return userProfile; }
   function isSignedIn() { return !!accessToken; }
-  function isGapiReady() { return gapiReady; }
 
-  return { init, signIn, signOut, onAuthChange, onAuthError, getToken, getProfile, isSignedIn, isGapiReady };
+  return { init, signIn, signOut, onAuthChange, onAuthError, getToken, getProfile, isSignedIn };
 })();

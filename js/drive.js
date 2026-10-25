@@ -1,46 +1,89 @@
 /* ═══════════════════════════════════════════
-   DRIVE — Google Drive API Interactions
+   DRIVE — Google Drive API Interactions (Native Fetch)
    ═══════════════════════════════════════════ */
 
 const Drive = (() => {
 
   /**
    * Extract a folder ID from a Google Drive URL or raw ID string.
-   * Supports various URL formats:
-   *   - https://drive.google.com/drive/folders/ABC123
-   *   - https://drive.google.com/drive/u/0/folders/ABC123
-   *   - https://drive.google.com/drive/folders/ABC123?usp=sharing
-   *   - Plain folder ID: ABC123
    */
   function parseFolderId(input) {
     if (!input) return null;
     const trimmed = input.trim();
 
-    // Try to pull folder ID from a URL
+    // Standard folders URL: /folders/ABC123
     const urlMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
     if (urlMatch) return urlMatch[1];
 
-    // If it looks like a raw ID (alphanumeric, dashes, underscores)
+    // Direct ID parameter: ?id=ABC123 or &id=ABC123
+    const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idParamMatch) return idParamMatch[1];
+
+    // Raw alphanumeric ID (typically 25+ chars, but allow 10+)
     if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
 
     return null;
   }
 
   /**
-   * Fetch metadata for a folder (name, etc).
+   * Helper for authenticated Drive API fetch with timeout.
    */
-  async function getFolderMeta(folderId) {
-    const resp = await gapi.client.drive.files.get({
-      fileId: folderId,
-      fields: 'id,name,mimeType,shared',
-      supportsAllDrives: true,
-    });
-    return resp.result;
+  async function _fetchDriveApi(url, timeoutMs = 15000) {
+    const token = Auth.getToken();
+    if (!token) {
+      throw new Error('Not signed in. Please sign in with your Google account.');
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      if (!resp.ok) {
+        let errMessage = `Google Drive API error (HTTP ${resp.status})`;
+        try {
+          const errBody = await resp.json();
+          if (errBody?.error?.message) {
+            errMessage = errBody.error.message;
+          }
+        } catch { /* ignore JSON parse error */ }
+
+        if (resp.status === 404) {
+          errMessage = 'Folder not found or you do not have permission to view it. Make sure the folder is shared with your signed-in Google account.';
+        } else if (resp.status === 401) {
+          errMessage = 'Session expired. Please sign in again.';
+        }
+        throw new Error(errMessage);
+      }
+
+      return await resp.json();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('Google Drive request timed out after 15 seconds. Please check your connection and try again.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
-   * List all image files inside a folder (handles pagination).
-   * Returns an array of file objects with { id, name, mimeType, thumbnailLink, createdTime, imageMediaMetadata }.
+   * Fetch metadata for a folder (name, etc).
+   */
+  async function getFolderMeta(folderId) {
+    const url = `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType,shared&supportsAllDrives=true`;
+    return await _fetchDriveApi(url);
+  }
+
+  /**
+   * List all image files inside a folder (handles pagination with a safety cap).
    */
   async function listImages(folderId) {
     const mimeFilter = FOLIO_CONFIG.IMAGE_MIMES
@@ -52,22 +95,32 @@ const Drive = (() => {
 
     let allFiles = [];
     let pageToken = null;
+    let pageCount = 0;
+    const maxPages = 20; // Cap at 2000 images to prevent infinite loops
 
     do {
-      const resp = await gapi.client.drive.files.list({
+      pageCount++;
+      const params = new URLSearchParams({
         q: query,
         fields,
-        pageSize: FOLIO_CONFIG.PAGE_SIZE,
-        pageToken: pageToken || undefined,
+        pageSize: String(FOLIO_CONFIG.PAGE_SIZE || 100),
         orderBy: 'createdTime desc',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
       });
-
-      if (resp.result.files) {
-        allFiles = allFiles.concat(resp.result.files);
+      if (pageToken) {
+        params.set('pageToken', pageToken);
       }
-      pageToken = resp.result.nextPageToken;
+
+      const url = `https://www.googleapis.com/drive/v3/files?${params.toString()}`;
+      const data = await _fetchDriveApi(url);
+
+      if (data.files && Array.isArray(data.files)) {
+        allFiles = allFiles.concat(data.files);
+      }
+
+      pageToken = data.nextPageToken || null;
+      if (pageCount >= maxPages) break;
     } while (pageToken);
 
     return allFiles;
@@ -75,16 +128,11 @@ const Drive = (() => {
 
   /**
    * Build an image URL that can be loaded in an <img> tag.
-   * Uses the Drive thumbnail link with a larger size,
-   * or falls back to the content download URL.
    */
-  function imageUrl(file, size = 800) {
-    // thumbnailLink is something like "https://lh3.googleusercontent.com/drive-viewer/..."
-    // We can adjust the size parameter
+  function imageUrl(file, size = 600) {
     if (file.thumbnailLink) {
       return file.thumbnailLink.replace(/=s\d+/, `=s${size}`);
     }
-    // Fallback: direct content URL (requires auth)
     return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
   }
 
@@ -98,5 +146,32 @@ const Drive = (() => {
     return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
   }
 
-  return { parseFolderId, getFolderMeta, listImages, imageUrl, fullImageUrl };
+  /**
+   * Fetch image data as a Blob URL using Authorization header.
+   */
+  async function fetchImageBlob(fileId) {
+    const token = Auth.getToken();
+    if (!token) throw new Error('Not signed in');
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+
+    try {
+      const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Failed to load image (HTTP ${resp.status})`);
+      }
+
+      const blob = await resp.blob();
+      return URL.createObjectURL(blob);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return { parseFolderId, getFolderMeta, listImages, imageUrl, fullImageUrl, fetchImageBlob };
 })();
