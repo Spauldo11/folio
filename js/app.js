@@ -247,6 +247,15 @@
     showToast(e.message || 'Failed to load Google auth.', true);
   }
 
+  // Ensure clean initial UI state if not restored from session
+  if (!Auth.isSignedIn()) {
+    showView('landing');
+    btnSignIn.hidden = false;
+    btnUserMenu.hidden = true;
+    btnFolderPicker.hidden = true;
+    btnShare.hidden = true;
+  }
+
   // Check URL params on initial load
   const initialFolderId = _getFolderFromURL();
   if (initialFolderId && Auth.isSignedIn()) {

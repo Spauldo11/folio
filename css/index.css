@@ -63,6 +63,10 @@
   margin: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   color-scheme: dark;
   scroll-behavior: smooth;
