@@ -10,6 +10,10 @@ const FOLIO_CONFIG = Object.freeze({
   // Create at: https://console.cloud.google.com/apis/credentials
   CLIENT_ID: '545626497983-nm2fee24h4ntsne4av1kl00f7id9g496.apps.googleusercontent.com',
 
+  // Google Cloud API Key (Optional — allows anyone to view shared public folders without signing in!)
+  // Create at: https://console.cloud.google.com/apis/credentials -> + Create Credentials -> API key
+  API_KEY: '',
+
   // Google Drive API — read-only scope
   SCOPES: 'https://www.googleapis.com/auth/drive.readonly',
 

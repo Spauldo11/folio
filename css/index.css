@@ -1057,6 +1057,89 @@ code {
 
 
 /* ═══════════════════════════════════════════
+   STANDALONE PHOTO BOOK (book.html)
+   ═══════════════════════════════════════════ */
+.photobook-body {
+  background: var(--clr-bg);
+  min-height: 100dvh;
+}
+
+#book-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px var(--gutter);
+  background: hsl(220 14% 6% / .92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--clr-border);
+}
+
+.book-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.book-mark {
+  color: var(--clr-accent);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+#book-heading {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--clr-text);
+  margin: 0;
+}
+
+.book-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#book-main {
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 24px var(--gutter) 60px;
+}
+
+.auth-modal {
+  margin: auto;
+  padding: 32px;
+  background: var(--clr-surface-0);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--r-lg);
+  color: var(--clr-text);
+  max-width: 440px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-modal::backdrop {
+  background: hsl(0 0% 0% / .75);
+  backdrop-filter: blur(8px);
+}
+
+.auth-modal-header h2 {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+#auth-modal-desc {
+  font-size: var(--fs-sm);
+  color: var(--clr-text-muted);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+/* ═══════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════ */
 @media (max-width: 900px) {

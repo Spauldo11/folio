@@ -30,19 +30,30 @@ const Drive = (() => {
    */
   async function _fetchDriveApi(url, timeoutMs = 15000) {
     const token = Auth.getToken();
-    if (!token) {
-      throw new Error('Not signed in. Please sign in with your Google account.');
+    const apiKey = FOLIO_CONFIG.API_KEY || '';
+
+    if (!token && !apiKey) {
+      const err = new Error('SIGN_IN_OR_KEY_REQUIRED');
+      err.code = 'SIGN_IN_OR_KEY_REQUIRED';
+      throw err;
     }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    let finalUrl = url;
+    const headers = { Accept: 'application/json' };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    } else if (apiKey) {
+      const sep = url.includes('?') ? '&' : '?';
+      finalUrl = `${url}${sep}key=${encodeURIComponent(apiKey)}`;
+    }
+
     try {
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
+      const resp = await fetch(finalUrl, {
+        headers,
         signal: controller.signal,
       });
 
@@ -56,9 +67,13 @@ const Drive = (() => {
         } catch { /* ignore JSON parse error */ }
 
         if (resp.status === 404) {
-          errMessage = 'Folder not found or you do not have permission to view it. Make sure the folder is shared with your signed-in Google account.';
-        } else if (resp.status === 401) {
-          errMessage = 'Session expired. Please sign in again.';
+          errMessage = 'Folder not found or not accessible. Make sure the folder link is correct and set to "Anyone with the link can view".';
+        } else if (resp.status === 401 || resp.status === 403) {
+          if (!token) {
+            errMessage = 'This folder requires sign-in or public sharing. Make sure the folder is set to "Anyone with the link can view", or sign in with Google.';
+          } else {
+            errMessage = 'Access denied. Make sure this folder is shared with your signed-in Google account.';
+          }
         }
         throw new Error(errMessage);
       }
@@ -131,9 +146,13 @@ const Drive = (() => {
    */
   function imageUrl(file, size = 600) {
     if (file.thumbnailLink) {
-      return file.thumbnailLink.replace(/=s\d+/, `=s${size}`);
+      if (/=s\d+/.test(file.thumbnailLink)) {
+        return file.thumbnailLink.replace(/=s\d+/, `=s${size}`);
+      }
+      return `${file.thumbnailLink}=s${size}`;
     }
-    return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+    // High-performance public CDN URL for Drive images
+    return `https://lh3.googleusercontent.com/d/${file.id}=s${size}`;
   }
 
   /**
@@ -141,33 +160,45 @@ const Drive = (() => {
    */
   function fullImageUrl(file) {
     if (file.thumbnailLink) {
-      return file.thumbnailLink.replace(/=s\d+/, '=s2048');
+      if (/=s\d+/.test(file.thumbnailLink)) {
+        return file.thumbnailLink.replace(/=s\d+/, '=s2048');
+      }
+      return `${file.thumbnailLink}=s2048`;
     }
-    return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+    return `https://lh3.googleusercontent.com/d/${file.id}=s2048`;
   }
 
   /**
-   * Fetch image data as a Blob URL using Authorization header.
+   * Fetch image data as a Blob URL using Authorization header or fallback to CDN URL.
    */
   async function fetchImageBlob(fileId) {
     const token = Auth.getToken();
-    if (!token) throw new Error('Not signed in');
+    const apiKey = FOLIO_CONFIG.API_KEY || '';
+
+    let url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const headers = {};
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    } else if (apiKey) {
+      url += `&key=${encodeURIComponent(apiKey)}`;
+    } else {
+      // Direct CDN link for public files
+      return `https://lh3.googleusercontent.com/d/${fileId}=s1600`;
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
 
     try {
-      const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
-
+      const resp = await fetch(url, { headers, signal: controller.signal });
       if (!resp.ok) {
-        throw new Error(`Failed to load image (HTTP ${resp.status})`);
+        return `https://lh3.googleusercontent.com/d/${fileId}=s1600`;
       }
-
       const blob = await resp.blob();
       return URL.createObjectURL(blob);
+    } catch {
+      return `https://lh3.googleusercontent.com/d/${fileId}=s1600`;
     } finally {
       clearTimeout(timer);
     }

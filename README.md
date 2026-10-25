@@ -58,18 +58,23 @@ Before Folio can access Google Drive, you need to create a Google Cloud project 
 
 ### Step 5: Add Your Client ID to Folio
 
-1. Copy the example config file:
-   ```bash
-   cp js/config.example.js js/config.js
-   ```
-2. Open `js/config.js` and replace the placeholder:
+Open `js/config.js` and set your Client ID:
+```javascript
+CLIENT_ID: '123456789-abcdef.apps.googleusercontent.com',
+```
+
+### Step 6 (Optional): Enable Public Viewing Without Sign-in
+
+To let anyone view your shared photo books **without signing in to Google**:
+1. In [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials), click **+ Create Credentials** → **API key**.
+2. Copy your new API key.
+3. Open `js/config.js` and paste it into `API_KEY`:
    ```javascript
-   CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com',
+   API_KEY: 'AIzaSy...',
    ```
-   with your actual Client ID:
-   ```javascript
-   CLIENT_ID: '123456789-abcdef.apps.googleusercontent.com',
-   ```
+4. In Google Drive, ensure your photo folder is shared as **"Anyone with the link can view"**.
+
+Now, anyone who opens a shared `book.html?folder=...` link can view all photos instantly without any sign-in prompt!
 
 ---
 

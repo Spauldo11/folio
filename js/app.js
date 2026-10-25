@@ -258,8 +258,15 @@
 
   // Check URL params on initial load
   const initialFolderId = _getFolderFromURL();
-  if (initialFolderId && Auth.isSignedIn()) {
-    loadFolder(initialFolderId);
+  if (initialFolderId) {
+    if (Auth.isSignedIn()) {
+      loadFolder(initialFolderId);
+    } else {
+      // Guest opening a shared link on index.html: route directly to standalone photobook
+      const basePath = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+      window.location.replace(`${basePath}/book.html?folder=${initialFolderId}`);
+      return;
+    }
   }
 
   /* ─── Sign in buttons ─── */
@@ -376,7 +383,8 @@
   /* ─── Share ─── */
   btnShare.addEventListener('click', () => {
     if (!currentFolderId) return;
-    const shareLink = `${window.location.origin}${window.location.pathname}?folder=${currentFolderId}`;
+    const basePath = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+    const shareLink = `${window.location.origin}${basePath}/book.html?folder=${currentFolderId}`;
     shareUrl.value = shareLink;
     shareCopied.hidden = true;
     shareModal.showModal();
