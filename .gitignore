@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 
+# Environment files & Secrets
+.env
+.env.local
+.env.*.local
+js/config.js
+!.env.example
 
 # OS files
 .DS_Store
