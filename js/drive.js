@@ -90,9 +90,59 @@ const Drive = (() => {
   }
 
   /**
+   * Cache for Apps Script responses to prevent duplicate calls.
+   */
+  const _scriptCache = new Map();
+
+  /**
+   * Fetch folder data using Google Apps Script Web App (Zero-Login).
+   */
+  async function fetchViaAppsScript(folderId) {
+    const scriptUrl = FOLIO_CONFIG.APPS_SCRIPT_URL || localStorage.getItem('folio_apps_script_url');
+    if (!scriptUrl) return null;
+
+    if (_scriptCache.has(folderId)) {
+      return _scriptCache.get(folderId);
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+
+    try {
+      const sep = scriptUrl.includes('?') ? '&' : '?';
+      const resp = await fetch(`${scriptUrl}${sep}folder=${encodeURIComponent(folderId)}`, {
+        signal: controller.signal,
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Apps Script responded with HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      _scriptCache.set(folderId, data);
+      return data;
+    } catch (err) {
+      console.warn('[Drive] Apps Script fetch error:', err);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Fetch metadata for a folder (name, etc).
    */
   async function getFolderMeta(folderId) {
+    // If apps script is configured, try it first
+    const scriptData = await fetchViaAppsScript(folderId);
+    if (scriptData && scriptData.name) {
+      return { id: folderId, name: scriptData.name };
+    }
+
     const url = `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType,shared&supportsAllDrives=true`;
     return await _fetchDriveApi(url);
   }
@@ -101,6 +151,12 @@ const Drive = (() => {
    * List all image files inside a folder (handles pagination with a safety cap).
    */
   async function listImages(folderId) {
+    // If apps script is configured, try it first
+    const scriptData = await fetchViaAppsScript(folderId);
+    if (scriptData && Array.isArray(scriptData.files) && scriptData.files.length > 0) {
+      return scriptData.files;
+    }
+
     const mimeFilter = FOLIO_CONFIG.IMAGE_MIMES
       .map(m => `mimeType='${m}'`)
       .join(' or ');

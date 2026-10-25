@@ -16,6 +16,10 @@ const FOLIO_CONFIG = Object.freeze({
   // Create at: https://console.cloud.google.com/apis/credentials -> + Create Credentials -> API key
   API_KEY: '',
 
+  // Google Apps Script Web App URL (Zero-Login public viewing)
+  // Create at: https://script.google.com -> Deploy as Web App (Anyone)
+  APPS_SCRIPT_URL: '',
+
   // Google Drive API — read-only scope
   SCOPES: 'https://www.googleapis.com/auth/drive.readonly',
 
